@@ -8,3 +8,9 @@ __pycache__/
 dist/
 build/
 *.map
+*.egg-info/
+.eggs/
+.tox/
+.mypy_cache/
+.pytest_cache/
+src/*.egg-info/
