@@ -48,13 +48,12 @@ async def query(
         turn += 1
         yield {"type": "turn_start", "turn": turn}
 
-        # Build API params
+        # Build API params (no "stream" key — .stream() implies it)
         api_params: dict[str, Any] = {
             "model": model,
             "max_tokens": max_tokens,
             "system": system_prompt,
             "messages": messages,
-            "stream": True,
         }
         if tool_schemas:
             api_params["tools"] = tool_schemas
