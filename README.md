@@ -4,66 +4,150 @@
 
 ## What is this?
 
-Astra Agent is a project to build a next-generation AI coding agent, informed by deep analysis of production agent architectures. This repo contains reference implementations from three sources, a comprehensive analysis document, and will evolve into an original agent framework.
+Astra Agent is a next-generation AI coding agent, informed by deep analysis of production agent architectures. It features an async generator-based agent loop, pluggable tool system, MCP client integration, file-based memory, and a Rich-powered CLI.
 
-## Repository Structure
+## Quick Start
+
+```bash
+# Install
+pip install -e .
+
+# Run interactive mode
+astra
+
+# Single prompt
+astra --prompt "What files are in this directory?"
+
+# With auto-approve permissions
+astra -p auto
+
+# Resume a session
+astra -r <session-id>
+```
+
+## Architecture
 
 ```
-astra-agent/
-├── reference/
-│   ├── claude-code-source/    # Original Claude Code TypeScript source (leaked via npm sourcemap)
-│   ├── claw-code-port/        # Claw Code — Python clean-room reimplementation by Sigrid Jin
-│   └── cld-raw/               # Raw TypeScript source extracted from the npm package
-├── docs/
-│   └── Claude-Code-Deep-Dive-Analysis.docx   # Comprehensive architecture analysis
-└── README.md
+cli.py (Click REPL)
+  -> agent/engine.py (QueryEngine: stateful session wrapper)
+       -> agent/query.py (async generator agent loop)
+            -> tools/* (bash, file_read/write/edit, grep, glob)
+            -> mcp/bridge.py (MCP tools as regular tools)
+       -> agent/context.py (system prompt builder)
+       -> memory/prompt.py (memory injection)
+       -> session/storage.py (JSON persistence)
+  -> ui/console.py (Rich terminal output)
+  -> mcp/client.py (MCP server connections)
 ```
 
-## Reference Codebases
-
-### 1. Claude Code Source (`reference/claude-code-source/`)
-The full TypeScript source of Anthropic's Claude Code CLI, exposed on March 31, 2026 via a sourcemap file accidentally shipped in the npm package. Key highlights:
-
-- **785KB main.tsx** entry point with React/Ink terminal rendering
-- **40+ pluggable tools** (Bash, file ops, search, agents, MCP, web)
-- **Async generator query loop** — the core agent reasoning engine
-- **Multi-agent coordinator mode** for parallel worker orchestration
-- **Auto-Dream memory system** — 4-phase background consolidation engine
-- **Unreleased features**: KAIROS (always-on assistant), Buddy (Tamagotchi pet), Coordinator mode, ULTRAPLAN
-
-### 2. Claw Code Port (`reference/claw-code-port/`)
-A Python clean-room reimplementation by engineer Sigrid Jin, built using OpenAI Codex via oh-my-codex (OmX). Mirrors the architectural patterns:
-
-- **66 Python files** across the core orchestration layer
-- **207 mirrored commands** and **100+ mirrored tools** (as metadata/shims)
-- Session management, prompt routing, turn loops, and permission system
-- Comprehensive test suite (22 tests)
-
-### 3. Raw Source (`reference/cld-raw/`)
-The pure TypeScript `src/` directory extracted directly from the npm sourcemap — no wrapper repo, just the code.
-
-## Key Architectural Patterns (from Analysis)
+### Core Design Patterns
 
 | Pattern | Description |
 |---------|-------------|
-| **Async Generator Agent Loop** | `query()` yields stream events, handles tool calls, recovery, and compaction in a single loop |
-| **Tool Composability** | Consistent interface: schema, call(), permissions, progress, rendering |
-| **Prompt Cache Optimization** | Static/dynamic boundary marker separates cacheable vs. session-specific prompt sections |
-| **Feature Gating** | Compile-time (Bun `feature()`) + runtime (GrowthBook) flags for safe experimentation |
-| **Dream Memory** | Background consolidation of session transcripts into durable CLAUDE.md files |
-| **Coordinator/Worker** | Spawn parallel agents, notify on completion (no polling), shared scratchpad |
+| **Async Generator Agent Loop** | `query()` yields stream events, handles tool calls, recovery, and loops until done |
+| **Tool ABC + Registry** | Each tool is a class with `name`, `description`, `input_schema`, `call()` |
+| **MCP Bridge** | MCP server tools wrapped as `MCPBridgeTool` and registered alongside built-in tools |
+| **Permission Modes** | `default` (ask for writes), `auto` (allow all), `bypass` (skip checks) |
+| **File-Based Memory** | YAML frontmatter `.md` files with `MEMORY.md` index, injected into system prompt |
+| **Session Persistence** | JSON snapshots of conversation + usage, resumable via `--resume` |
+
+## Project Structure
+
+```
+src/astra/
+├── __init__.py, __main__.py
+├── cli.py                    # Click CLI with REPL + single-prompt modes
+├── config.py                 # AstraConfig frozen dataclass
+├── types.py                  # ToolResult, Usage, StopReason, StreamEvent
+├── agent/
+│   ├── query.py              # Core agent loop (async generator)
+│   ├── engine.py             # QueryEngine (stateful session wrapper)
+│   └── context.py            # System prompt builder
+├── tools/
+│   ├── __init__.py           # ToolRegistry + build_default_registry()
+│   ├── base.py               # Tool ABC
+│   ├── bash.py               # Shell command execution
+│   ├── file_read.py          # Read files with line numbers
+│   ├── file_write.py         # Create/overwrite files
+│   ├── file_edit.py          # String replacement edits
+│   ├── grep.py               # Regex search (ripgrep/grep)
+│   └── glob.py               # File pattern matching
+├── mcp/
+│   ├── config.py             # Load .mcp.json configs
+│   ├── client.py             # MCPManager (connect, discover, call)
+│   └── bridge.py             # MCPBridgeTool adapter
+├── memory/
+│   ├── types.py              # MemoryType enum, Memory dataclass
+│   ├── store.py              # MemoryStore CRUD
+│   └── prompt.py             # Memory prompt injection
+├── permissions/
+│   └── checker.py            # 3-mode permission system
+├── session/
+│   ├── storage.py            # JSON session persistence
+│   └── usage.py              # Token/cost tracking
+└── ui/
+    └── console.py            # Rich-based streaming UI
+```
+
+## Built-in Tools
+
+| Tool | Description |
+|------|-------------|
+| `bash` | Execute shell commands with timeout support |
+| `file_read` | Read files with line numbers, offset/limit support |
+| `file_write` | Create or overwrite files |
+| `file_edit` | Find-and-replace exact string edits |
+| `grep` | Regex search via ripgrep (falls back to grep) |
+| `glob` | File pattern matching |
+
+## MCP Integration
+
+Create a `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "npx",
+      "args": ["-y", "@some/mcp-server"]
+    }
+  }
+}
+```
+
+MCP tools are automatically discovered and available as `mcp__servername__toolname`.
+
+## Reference Codebases
+
+This project was informed by analysis of:
+
+### 1. Claude Code Source (`reference/claude-code-main/`)
+Anthropic's production AI coding CLI (TypeScript/React/Ink), featuring 40+ tools, async generator agent loop, multi-agent coordination, and auto-dream memory consolidation.
+
+### 2. Claw Code Port (`reference/claw-code-main/`)
+Python clean-room reimplementation by Sigrid Jin, mirroring 207 commands and 100+ tools as metadata/shims.
+
+### 3. Raw Source (`reference/cld-raw/`)
+Pure TypeScript `src/` directory from the npm sourcemap.
+
+### Analysis Document
+See `docs/Claude-Code-Deep-Dive-Analysis.docx` for the comprehensive architecture analysis.
 
 ## Roadmap
 
 - [x] Collect and organize reference codebases
 - [x] Deep dive analysis document
-- [ ] Design Astra Agent architecture (inspired by patterns above)
-- [ ] Build core agent loop in Python
-- [ ] Implement tool system with plugin support
-- [ ] Add MCP client integration
-- [ ] Memory/context management system
-- [ ] CLI interface
-- [ ] First working prototype
+- [x] Design Astra Agent architecture (inspired by patterns above)
+- [x] Build core agent loop in Python
+- [x] Implement tool system with plugin support
+- [x] Add MCP client integration
+- [x] Memory/context management system
+- [x] CLI interface
+- [x] First working prototype
+- [ ] Tests and CI
+- [ ] Context compaction (auto-compact on token budget)
+- [ ] Multi-agent coordinator mode
+- [ ] Plugin system for custom tools
 
 ## Author
 
