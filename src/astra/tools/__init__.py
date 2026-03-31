@@ -30,8 +30,13 @@ def build_default_registry() -> ToolRegistry:
     from astra.tools.file_write import FileWriteTool
     from astra.tools.glob import GlobTool
     from astra.tools.grep import GrepTool
+    from astra.tools.web_fetch import WebFetchTool
+    from astra.tools.web_search import WebSearchTool
 
     registry = ToolRegistry()
-    for tool_cls in [BashTool, FileReadTool, FileWriteTool, FileEditTool, GrepTool, GlobTool]:
+    for tool_cls in [
+        BashTool, FileReadTool, FileWriteTool, FileEditTool,
+        GrepTool, GlobTool, WebSearchTool, WebFetchTool,
+    ]:
         registry.register(tool_cls())
     return registry

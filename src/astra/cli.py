@@ -25,9 +25,11 @@ from astra.config import AstraConfig, PermissionMode
 @click.option("--no-thinking", is_flag=True, help="Disable extended thinking")
 @click.option("--prompt", help="Single prompt (non-interactive mode)")
 @click.option("--resume", "-r", "session_id", default=None, help="Resume a session by ID")
+@click.option("--auto-lint", is_flag=True, help="Auto-run linter after file edits")
+@click.option("--auto-test", is_flag=True, help="Auto-run tests after file edits")
 @click.version_option(version="0.1.0", prog_name="astra")
 @click.pass_context
-def main(ctx, model, permission_mode, cwd, verbose, no_thinking, prompt, session_id):
+def main(ctx, model, permission_mode, cwd, verbose, no_thinking, prompt, session_id, auto_lint, auto_test):
     """Astra Agent - AI coding assistant powered by Claude."""
     config = AstraConfig(
         model=model or AstraConfig.model,
@@ -41,9 +43,9 @@ def main(ctx, model, permission_mode, cwd, verbose, no_thinking, prompt, session
         if prompt:
             asyncio.run(_run_single(config, prompt))
         elif session_id:
-            asyncio.run(_run_interactive(config, session_id=session_id))
+            asyncio.run(_run_interactive(config, session_id=session_id, auto_lint=auto_lint, auto_test=auto_test))
         else:
-            asyncio.run(_run_interactive(config))
+            asyncio.run(_run_interactive(config, auto_lint=auto_lint, auto_test=auto_test))
 
 
 @main.command()
@@ -61,10 +63,14 @@ def sessions():
 
 
 async def _run_interactive(
-    config: AstraConfig, session_id: str | None = None
+    config: AstraConfig,
+    session_id: str | None = None,
+    auto_lint: bool = False,
+    auto_test: bool = False,
 ) -> None:
     """Main interactive REPL loop."""
     from astra.agent.engine import QueryEngine
+    from astra.commands import execute_command, parse_command
     from astra.ui.console import AgentUI
 
     ui = AgentUI()
@@ -96,18 +102,26 @@ async def _run_interactive(
             if not stripped:
                 continue
 
-            # Handle slash commands
-            if stripped in ("/exit", "/quit", "/q"):
-                break
-            if stripped == "/save":
-                path = await engine.save_session()
-                click.echo(f"Session saved: {path}")
-                continue
-            if stripped == "/usage":
-                ui.print_usage(engine.usage.summary())
-                continue
-            if stripped == "/help":
-                _print_help()
+            # Handle slash commands via the command system
+            parsed = parse_command(stripped)
+            if parsed:
+                cmd_name, cmd_args = parsed
+                try:
+                    result = await execute_command(cmd_name, cmd_args, engine)
+                    if result.output:
+                        click.echo(result.output)
+                    # If command wants to send to model, submit as prompt
+                    if result.should_send_to_model and result.output:
+                        try:
+                            async for event in engine.submit_message(result.output):
+                                ui.handle_stream_event(event)
+                            ui.print_usage(engine.usage.summary())
+                        except KeyboardInterrupt:
+                            click.echo("\n[interrupted]")
+                except SystemExit:
+                    break
+                except Exception as e:
+                    ui.print_error(f"Command error: {e}")
                 continue
 
             # Submit to engine
@@ -147,18 +161,6 @@ async def _run_single(config: AstraConfig, prompt: str) -> None:
         sys.exit(1)
     finally:
         await engine.shutdown()
-
-
-def _print_help() -> None:
-    click.echo(
-        """
-Commands:
-  /exit, /quit, /q   Exit the agent
-  /save              Save the current session
-  /usage             Show token usage and cost
-  /help              Show this help message
-"""
-    )
 
 
 if __name__ == "__main__":

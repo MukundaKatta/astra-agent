@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -69,8 +70,26 @@ class FileEditTool(Tool):
             )
 
         new_content = content.replace(old_string, new_string, 1)
+
+        # Generate unified diff for display
+        old_lines = content.splitlines(keepends=True)
+        new_lines = new_content.splitlines(keepends=True)
+        diff = "".join(
+            difflib.unified_diff(
+                old_lines, new_lines,
+                fromfile=str(path), tofile=str(path),
+                n=3,
+            )
+        )
+
         try:
             path.write_text(new_content, encoding="utf-8")
-            return ToolResult(output=f"Successfully edited {path}")
+            output = f"Successfully edited {path}"
+            if diff:
+                # Include compact diff in output
+                if len(diff) > 2000:
+                    diff = diff[:2000] + "\n... (diff truncated)"
+                output += f"\n\n{diff}"
+            return ToolResult(output=output)
         except Exception as e:
             return ToolResult(output=f"Error writing file: {e}", is_error=True)

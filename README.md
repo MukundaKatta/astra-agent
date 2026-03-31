@@ -28,15 +28,20 @@ astra -r <session-id>
 ## Architecture
 
 ```
-cli.py (Click REPL)
+cli.py (Click REPL + slash commands)
+  -> commands.py (19 slash commands: /diff, /undo, /commit, /plan, etc.)
   -> agent/engine.py (QueryEngine: stateful session wrapper)
        -> agent/query.py (async generator agent loop)
-            -> tools/* (bash, file_read/write/edit, grep, glob)
+            -> tools/* (bash, file_read/write/edit, grep, glob, web_search, web_fetch)
             -> mcp/bridge.py (MCP tools as regular tools)
        -> agent/context.py (system prompt builder)
+       -> agent/compaction.py (context compaction)
+       -> agent/repomap.py (AST-based codebase indexing)
        -> memory/prompt.py (memory injection)
        -> session/storage.py (JSON persistence)
-  -> ui/console.py (Rich terminal output)
+  -> providers/* (multi-model: Anthropic, OpenAI, Ollama/local)
+  -> hooks.py (auto-lint, auto-test after edits)
+  -> ui/console.py (Rich terminal output with diff highlighting)
   -> mcp/client.py (MCP server connections)
 ```
 
@@ -56,22 +61,34 @@ cli.py (Click REPL)
 ```
 src/astra/
 ├── __init__.py, __main__.py
-├── cli.py                    # Click CLI with REPL + single-prompt modes
+├── cli.py                    # Click CLI with REPL + slash command integration
+├── commands.py               # 19 slash commands (/diff, /undo, /commit, /plan, etc.)
 ├── config.py                 # AstraConfig frozen dataclass
+├── hooks.py                  # Auto-lint, auto-test post-edit hooks
 ├── types.py                  # ToolResult, Usage, StopReason, StreamEvent
 ├── agent/
 │   ├── query.py              # Core agent loop (async generator)
 │   ├── engine.py             # QueryEngine (stateful session wrapper)
-│   └── context.py            # System prompt builder
+│   ├── context.py            # System prompt builder
+│   ├── compaction.py         # Context compaction (summarize old messages)
+│   └── repomap.py            # AST-based repo map with symbol extraction
 ├── tools/
 │   ├── __init__.py           # ToolRegistry + build_default_registry()
 │   ├── base.py               # Tool ABC
 │   ├── bash.py               # Shell command execution
 │   ├── file_read.py          # Read files with line numbers
 │   ├── file_write.py         # Create/overwrite files
-│   ├── file_edit.py          # String replacement edits
+│   ├── file_edit.py          # String replacement edits with diff output
 │   ├── grep.py               # Regex search (ripgrep/grep)
-│   └── glob.py               # File pattern matching
+│   ├── glob.py               # File pattern matching
+│   ├── web_search.py         # DuckDuckGo web search (no API key)
+│   └── web_fetch.py          # URL fetcher with HTML-to-text
+├── providers/
+│   ├── __init__.py           # Provider abstraction
+│   ├── base.py               # LLMProvider ABC
+│   ├── anthropic_provider.py # Claude models (primary)
+│   ├── openai_provider.py    # OpenAI/Azure/Ollama/LM Studio
+│   └── registry.py           # Auto-detect provider from model name
 ├── mcp/
 │   ├── config.py             # Load .mcp.json configs
 │   ├── client.py             # MCPManager (connect, discover, call)
@@ -86,7 +103,7 @@ src/astra/
 │   ├── storage.py            # JSON session persistence
 │   └── usage.py              # Token/cost tracking
 └── ui/
-    └── console.py            # Rich-based streaming UI
+    └── console.py            # Rich UI with diff highlighting + permission preview
 ```
 
 ## Built-in Tools
@@ -96,9 +113,72 @@ src/astra/
 | `bash` | Execute shell commands with timeout support |
 | `file_read` | Read files with line numbers, offset/limit support |
 | `file_write` | Create or overwrite files |
-| `file_edit` | Find-and-replace exact string edits |
+| `file_edit` | Find-and-replace exact string edits with unified diff output |
 | `grep` | Regex search via ripgrep (falls back to grep) |
 | `glob` | File pattern matching |
+| `web_search` | DuckDuckGo search (no API key required) |
+| `web_fetch` | Fetch URLs with HTML-to-text conversion |
+
+## Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show all available commands |
+| `/exit`, `/quit` | Exit the agent |
+| `/save` | Save the current session |
+| `/usage`, `/tokens` | Show token usage and cost |
+| `/clear` | Clear conversation history |
+| `/compact` | Compact old messages to save context |
+| `/diff` | Show git diff of recent changes |
+| `/undo` | Undo last git commit (soft reset) |
+| `/commit [msg]` | Auto-commit with conventional message |
+| `/test [args]` | Run project tests |
+| `/lint [args]` | Run linter and fix issues |
+| `/fix [issue]` | Analyze and fix errors |
+| `/plan [task]` | Create implementation plan (no changes) |
+| `/ask [question]` | Ask about codebase (no changes) |
+| `/model [name]` | Show or switch the model |
+| `/map` | Show repo structure with key symbols |
+| `/files` | List files in working directory |
+
+## Multi-Model Support
+
+```bash
+# Anthropic Claude (default)
+astra -m claude-sonnet-4-20250514
+
+# OpenAI (requires `pip install astra-agent[openai]`)
+astra -m gpt-4o
+
+# Ollama local models
+astra -m ollama/llama3
+
+# LM Studio
+astra -m lmstudio/codestral
+```
+
+## Auto Hooks
+
+```bash
+# Auto-lint after file edits
+astra --auto-lint
+
+# Auto-test after file edits
+astra --auto-test
+
+# Both
+astra --auto-lint --auto-test
+```
+
+Configure hooks via `.astra-hooks.json`:
+```json
+{
+  "auto_lint": true,
+  "auto_test": false,
+  "lint_command": "ruff check --fix",
+  "test_command": "pytest --tb=short -q"
+}
+```
 
 ## MCP Integration
 
@@ -144,10 +224,19 @@ See `docs/Claude-Code-Deep-Dive-Analysis.docx` for the comprehensive architectur
 - [x] Memory/context management system
 - [x] CLI interface
 - [x] First working prototype
+- [x] Web search and fetch tools
+- [x] Slash command system (19 commands)
+- [x] Context compaction
+- [x] Repo map with AST symbol extraction
+- [x] Multi-model support (OpenAI, Ollama, LM Studio)
+- [x] Auto-lint and auto-test hooks
+- [x] Diff display for file edits
+- [x] Interactive permission prompting with diff preview
 - [ ] Tests and CI
-- [ ] Context compaction (auto-compact on token budget)
 - [ ] Multi-agent coordinator mode
 - [ ] Plugin system for custom tools
+- [ ] Conversation branching/forking
+- [ ] Cost budgets and limits
 
 ## Author
 

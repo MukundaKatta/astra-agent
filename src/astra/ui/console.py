@@ -7,6 +7,7 @@ import json
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.syntax import Syntax
 from rich.text import Text
 
 from astra.types import StreamEvent
@@ -28,7 +29,8 @@ class AgentUI:
                 f"[bold blue]Astra Agent[/bold blue] v0.1.0\n"
                 f"Model: [cyan]{model}[/cyan]\n"
                 f"Tools: {tool_count}\n"
-                f"Session: {session_id}",
+                f"Session: {session_id}\n"
+                f"Type [green]/help[/green] for commands",
                 title="[bold]Welcome[/bold]",
                 border_style="blue",
             )
@@ -91,21 +93,35 @@ class AgentUI:
         elif event_type == "tool_result":
             output = event["output"]
             is_error = event.get("is_error", False)
+            tool_name = event.get("name", "")
             style = "red" if is_error else "green"
-            title = f"{'Error' if is_error else 'Result'}: {event.get('name', '')}"
+            title = f"{'Error' if is_error else 'Result'}: {tool_name}"
 
-            # Truncate for display
-            if len(output) > 3000:
-                output = output[:3000] + "\n... (truncated for display)"
+            # Detect diff output and render with syntax highlighting
+            if not is_error and "\n---" in output and "\n+++" in output:
+                # Split result text from diff
+                parts = output.split("\n---", 1)
+                result_text = parts[0].strip()
+                diff_text = "---" + parts[1]
 
-            console.print(
-                Panel(
-                    output,
-                    title=title,
-                    style=style,
-                    width=min(100, console.width),
+                if result_text:
+                    console.print(
+                        Panel(result_text, title=title, style=style,
+                              width=min(100, console.width))
+                    )
+                # Render diff with syntax highlighting
+                if len(diff_text) > 3000:
+                    diff_text = diff_text[:3000] + "\n... (diff truncated)"
+                console.print(Syntax(diff_text, "diff", theme="monokai",
+                                     word_wrap=True))
+            else:
+                # Truncate for display
+                if len(output) > 3000:
+                    output = output[:3000] + "\n... (truncated for display)"
+                console.print(
+                    Panel(output, title=title, style=style,
+                          width=min(100, console.width))
                 )
-            )
 
         elif event_type == "permission_denied":
             console.print(
@@ -133,15 +149,46 @@ class AgentUI:
 
     async def ask_permission(self, tool_name: str, tool_input: dict) -> bool:
         """Ask user for permission to run a tool."""
-        summary = _summarize_tool_input(tool_name, tool_input)
         console.print(
-            f"\n[yellow]Permission needed:[/yellow] {tool_name}"
+            f"\n[yellow]Permission needed:[/yellow] [bold]{tool_name}[/bold]"
         )
-        if summary:
-            console.print(f"  [dim]{summary}[/dim]")
 
-        response = console.input("[yellow]Allow? (y/n): [/yellow]").strip().lower()
-        return response in ("y", "yes")
+        # Show diff preview for file edits
+        if tool_name == "file_edit":
+            file_path = tool_input.get("file_path", "")
+            old_str = tool_input.get("old_string", "")
+            new_str = tool_input.get("new_string", "")
+            console.print(f"  File: [cyan]{file_path}[/cyan]")
+            if old_str and new_str:
+                _show_inline_diff(old_str, new_str)
+        elif tool_name == "file_write":
+            file_path = tool_input.get("file_path", "")
+            content = tool_input.get("content", "")
+            console.print(f"  File: [cyan]{file_path}[/cyan]")
+            console.print(f"  Size: {len(content)} chars")
+        elif tool_name == "bash":
+            cmd = tool_input.get("command", "")
+            console.print(f"  Command: [bold]{cmd}[/bold]")
+        else:
+            summary = _summarize_tool_input(tool_name, tool_input)
+            if summary:
+                console.print(f"  [dim]{summary}[/dim]")
+
+        response = console.input("[yellow]Allow? (y/n/always): [/yellow]").strip().lower()
+        return response in ("y", "yes", "a", "always")
+
+
+def _show_inline_diff(old: str, new: str) -> None:
+    """Show a compact inline diff for file edit permission preview."""
+    import difflib
+
+    old_lines = old.splitlines(keepends=True)
+    new_lines = new.splitlines(keepends=True)
+    diff = "".join(difflib.unified_diff(old_lines, new_lines, n=2))
+    if diff:
+        if len(diff) > 1500:
+            diff = diff[:1500] + "\n... (preview truncated)"
+        console.print(Syntax(diff, "diff", theme="monokai", word_wrap=True))
 
 
 def _summarize_tool_input(tool_name: str, tool_input: dict) -> str:
@@ -157,6 +204,10 @@ def _summarize_tool_input(tool_name: str, tool_input: dict) -> str:
         return f"/{tool_input.get('pattern', '')}/ in {path}"
     elif tool_name == "glob":
         return tool_input.get("pattern", "")
+    elif tool_name in ("web_search",):
+        return tool_input.get("query", "")[:100]
+    elif tool_name in ("web_fetch",):
+        return tool_input.get("url", "")[:100]
     else:
         # MCP or unknown: show compact JSON
         try:

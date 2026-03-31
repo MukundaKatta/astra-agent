@@ -16,6 +16,10 @@ dependencies = [
     "pathspec>=0.12",
 ]
 
+[project.optional-dependencies]
+openai = ["openai>=1.0"]
+all = ["openai>=1.0"]
+
 [project.scripts]
 astra = "astra.cli:main"
 
