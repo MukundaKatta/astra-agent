@@ -35,6 +35,7 @@ class BashTool(Tool):
         command = tool_input["command"]
         timeout = min(tool_input.get("timeout", 120), 600)
 
+        proc = None
         try:
             proc = await asyncio.create_subprocess_shell(
                 command,
@@ -59,7 +60,11 @@ class BashTool(Tool):
             ).truncated()
 
         except asyncio.TimeoutError:
-            proc.kill()
+            if proc:
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass
             return ToolResult(
                 output=f"Command timed out after {timeout}s", is_error=True
             )

@@ -85,7 +85,7 @@ def _extract_python_symbols(filepath: Path) -> list[str]:
     try:
         source = filepath.read_text(encoding="utf-8", errors="replace")
         tree = ast.parse(source)
-    except (SyntaxError, UnicodeDecodeError):
+    except (SyntaxError, UnicodeDecodeError, PermissionError, OSError):
         return []
 
     symbols = []
@@ -131,7 +131,7 @@ def _extract_js_symbols(filepath: Path) -> list[str]:
     import re
     try:
         source = filepath.read_text(encoding="utf-8", errors="replace")
-    except Exception:
+    except (PermissionError, OSError):
         return []
 
     symbols = []

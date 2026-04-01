@@ -12,7 +12,7 @@ class PermissionDecision(str, Enum):
     DENY = "deny"
 
 
-ALWAYS_ALLOW = frozenset({"file_read", "glob", "grep"})
+ALWAYS_ALLOW = frozenset({"file_read", "glob", "grep", "web_search", "web_fetch"})
 ALWAYS_ASK_DEFAULT = frozenset({"bash", "file_write", "file_edit"})
 
 

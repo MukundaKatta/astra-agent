@@ -181,9 +181,12 @@ async def query(
                     # Ask user for permission if callback provided
                     allowed = False
                     if on_permission_request:
-                        allowed = await on_permission_request(
-                            tool_use.name, tool_use.input
-                        )
+                        try:
+                            allowed = await on_permission_request(
+                                tool_use.name, tool_use.input
+                            )
+                        except Exception:
+                            allowed = False
                     if not allowed:
                         yield {
                             "type": "permission_denied",
@@ -199,9 +202,9 @@ async def query(
                             "id": tool_use.id,
                             "input": tool_use.input,
                         }
-                        result = await tool.call(tool_input=tool_use.input, cwd=cwd)
-                        result_output = result.output
-                        is_error = result.is_error
+                        result_output, is_error = await _execute_tool(
+                            tool, tool_use, cwd
+                        )
                 else:
                     # ALLOW
                     yield {
@@ -210,9 +213,9 @@ async def query(
                         "id": tool_use.id,
                         "input": tool_use.input,
                     }
-                    result = await tool.call(tool_input=tool_use.input, cwd=cwd)
-                    result_output = result.output
-                    is_error = result.is_error
+                    result_output, is_error = await _execute_tool(
+                        tool, tool_use, cwd
+                    )
 
             yield {
                 "type": "tool_result",
@@ -235,3 +238,12 @@ async def query(
         messages.append({"role": "user", "content": tool_results})
 
     yield {"type": "turn_complete", "stop_reason": "max_turns"}
+
+
+async def _execute_tool(tool: Any, tool_use: Any, cwd: str) -> tuple[str, bool]:
+    """Execute a tool with error handling. Returns (output, is_error)."""
+    try:
+        result = await tool.call(tool_input=tool_use.input, cwd=cwd)
+        return result.output, result.is_error
+    except Exception as e:
+        return f"Tool execution error: {type(e).__name__}: {e}", True

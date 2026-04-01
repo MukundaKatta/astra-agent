@@ -83,8 +83,9 @@ async def cmd_tokens(args: str, engine: Any) -> CommandResult:
 
 @command("clear", "Clear conversation history (start fresh)")
 async def cmd_clear(args: str, engine: Any) -> CommandResult:
+    from astra.session.usage import UsageTracker
     engine.messages.clear()
-    engine.usage = type(engine.usage)()  # Reset usage tracker
+    engine.usage = UsageTracker()  # Reset usage tracker
     return CommandResult("Conversation cleared.")
 
 
@@ -293,7 +294,10 @@ def parse_command(user_input: str) -> tuple[str, str] | None:
     stripped = user_input.strip()
     if not stripped.startswith("/"):
         return None
-    parts = stripped[1:].split(None, 1)
+    rest = stripped[1:].strip()
+    if not rest:
+        return None  # bare "/" is not a command
+    parts = rest.split(None, 1)
     cmd_name = parts[0].lower()
     args = parts[1] if len(parts) > 1 else ""
     if cmd_name in COMMANDS:

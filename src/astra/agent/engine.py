@@ -42,6 +42,7 @@ class QueryEngine:
         self.mcp_manager = MCPManager()
         self._session_storage = SessionStorage(config.session_dir)
         self._system_prompt: str | None = None
+        self._initialized = False
         self.on_permission_request: (
             Callable[[str, dict], Coroutine[Any, Any, bool]] | None
         ) = None
@@ -49,8 +50,11 @@ class QueryEngine:
     async def initialize(self) -> None:
         """Connect MCP servers, build system prompt."""
         # Connect MCP servers
-        await self.mcp_manager.connect_from_config(self.config.mcp_config_paths)
-        register_mcp_tools(self.mcp_manager, self.tools)
+        try:
+            await self.mcp_manager.connect_from_config(self.config.mcp_config_paths)
+            register_mcp_tools(self.mcp_manager, self.tools)
+        except Exception:
+            pass  # MCP is optional — continue without it
 
         # Build system prompt
         self._system_prompt = await build_system_prompt(
@@ -58,11 +62,16 @@ class QueryEngine:
             tools=self.tools,
             memory_dir=self.config.memory_dir,
         )
+        self._initialized = True
 
     async def submit_message(
         self, prompt: str
     ) -> AsyncGenerator[StreamEvent, None]:
         """Submit a user message and stream back events."""
+        if not self._initialized:
+            raise RuntimeError(
+                "Engine not initialized. Call await engine.initialize() first."
+            )
         self.messages.append({"role": "user", "content": prompt})
 
         async for event in query(
@@ -96,8 +105,15 @@ class QueryEngine:
         storage = SessionStorage(config.session_dir)
         data = storage.load(session_id)
         engine = cls(config=config, session_id=session_id)
-        engine.messages = data["messages"]
-        engine.usage = UsageTracker(total=Usage(**data["usage"]))
+        engine.messages = data.get("messages", [])
+        # Handle old session files that may lack cache fields
+        usage_data = data.get("usage", {})
+        engine.usage = UsageTracker(total=Usage(
+            input_tokens=usage_data.get("input_tokens", 0),
+            output_tokens=usage_data.get("output_tokens", 0),
+            cache_creation_input_tokens=usage_data.get("cache_creation_input_tokens", 0),
+            cache_read_input_tokens=usage_data.get("cache_read_input_tokens", 0),
+        ))
         await engine.initialize()
         return engine
 

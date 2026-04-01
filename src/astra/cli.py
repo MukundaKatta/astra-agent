@@ -103,6 +103,13 @@ async def _run_interactive(
                 continue
 
             # Handle slash commands via the command system
+            if stripped.startswith("/") and not parse_command(stripped):
+                # Unrecognized slash command
+                cmd_name = stripped[1:].split()[0] if stripped[1:].strip() else ""
+                if cmd_name:
+                    click.echo(f"Unknown command: /{cmd_name}. Type /help for available commands.")
+                    continue
+
             parsed = parse_command(stripped)
             if parsed:
                 cmd_name, cmd_args = parsed
@@ -139,7 +146,10 @@ async def _run_interactive(
             await engine.save_session()
         except Exception:
             pass
-        await engine.shutdown()
+        try:
+            await engine.shutdown()
+        except Exception:
+            pass
         click.echo("Goodbye!")
 
 

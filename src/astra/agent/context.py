@@ -111,7 +111,7 @@ async def _load_memory_prompt(memory_dir: Path) -> str | None:
     index = memory_dir / "MEMORY.md"
     if not index.exists():
         return None
-    content = index.read_text().strip()
+    content = index.read_text(encoding="utf-8").strip()
     if not content:
         return None
     lines = content.split("\n")
@@ -125,7 +125,7 @@ def _load_project_instructions(cwd: str) -> str | None:
     for name in ["ASTRA.md", "CLAUDE.md"]:
         path = Path(cwd) / name
         if path.exists():
-            content = path.read_text().strip()
+            content = path.read_text(encoding="utf-8").strip()
             if content:
                 # Truncate if very long
                 if len(content) > 10000:
