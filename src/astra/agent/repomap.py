@@ -92,8 +92,7 @@ def _extract_python_symbols(filepath: Path) -> list[str]:
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.ClassDef):
             bases = ", ".join(
-                ast.dump(b) if not isinstance(b, ast.Name) else b.id
-                for b in node.bases
+                _ast_name(b) for b in node.bases
             )
             symbols.append(f"class {node.name}({bases})" if bases else f"class {node.name}")
             # Get methods
@@ -112,6 +111,22 @@ def _extract_python_symbols(filepath: Path) -> list[str]:
                     symbols.append(f"{target.id} = ...")
 
     return symbols
+
+
+def _ast_name(node: ast.expr) -> str:
+    """Convert an AST node to a readable name string."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        value = _ast_name(node.value)
+        return f"{value}.{node.attr}"
+    if isinstance(node, ast.Subscript):
+        value = _ast_name(node.value)
+        slice_val = _ast_name(node.slice) if isinstance(node.slice, ast.expr) else "..."
+        return f"{value}[{slice_val}]"
+    if isinstance(node, ast.Constant):
+        return repr(node.value)
+    return "..."
 
 
 def _format_args(args: ast.arguments) -> str:

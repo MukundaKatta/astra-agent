@@ -103,14 +103,14 @@ async def _run_interactive(
                 continue
 
             # Handle slash commands via the command system
-            if stripped.startswith("/") and not parse_command(stripped):
+            parsed = parse_command(stripped)
+            if stripped.startswith("/") and not parsed:
                 # Unrecognized slash command
-                cmd_name = stripped[1:].split()[0] if stripped[1:].strip() else ""
-                if cmd_name:
-                    click.echo(f"Unknown command: /{cmd_name}. Type /help for available commands.")
+                cmd_attempt = stripped[1:].split()[0] if stripped[1:].strip() else ""
+                if cmd_attempt:
+                    click.echo(f"Unknown command: /{cmd_attempt}. Type /help for available commands.")
                     continue
 
-            parsed = parse_command(stripped)
             if parsed:
                 cmd_name, cmd_args = parsed
                 try:
@@ -161,6 +161,7 @@ async def _run_single(config: AstraConfig, prompt: str) -> None:
     engine = QueryEngine(config)
     await engine.initialize()
     ui = AgentUI()
+    engine.on_permission_request = ui.ask_permission
 
     try:
         async for event in engine.submit_message(prompt):
@@ -170,7 +171,10 @@ async def _run_single(config: AstraConfig, prompt: str) -> None:
         ui.print_error(str(e))
         sys.exit(1)
     finally:
-        await engine.shutdown()
+        try:
+            await engine.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

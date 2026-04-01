@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import urllib.parse
 from typing import Any, ClassVar
 
@@ -50,7 +49,10 @@ class WebSearchTool(Tool):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
+            if proc.returncode != 0:
+                err = stderr.decode("utf-8", errors="replace").strip()
+                return ToolResult(output=f"Search failed: {err or 'curl error'}", is_error=True)
             html = stdout.decode("utf-8", errors="replace")
 
             results = _parse_ddg_html(html, max_results)

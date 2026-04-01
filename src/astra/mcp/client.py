@@ -71,9 +71,14 @@ class MCPManager:
             )
 
         if config.transport == "stdio":
-            from mcp.client.stdio import stdio_client
+            from mcp.client.stdio import stdio_client, StdioServerParameters
 
-            ctx = stdio_client(config.command, config.args, env=config.env or None)
+            server_params = StdioServerParameters(
+                command=config.command,
+                args=config.args,
+                env=config.env if config.env else None,
+            )
+            ctx = stdio_client(server_params)
             streams = await ctx.__aenter__()
             self._contexts.append(ctx)
             read_stream, write_stream = streams
@@ -84,7 +89,7 @@ class MCPManager:
         elif config.transport in ("sse", "http"):
             from mcp.client.sse import sse_client
 
-            ctx = sse_client(config.url, headers=config.headers or None)
+            ctx = sse_client(config.url, headers=config.headers if config.headers else None)
             streams = await ctx.__aenter__()
             self._contexts.append(ctx)
             read_stream, write_stream = streams

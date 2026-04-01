@@ -23,11 +23,21 @@ def get_provider(model: str) -> tuple[LLMProvider, str]:
         "ollama/llama3" -> (OpenAIProvider w/ localhost, "llama3")
         "local/codestral" -> (OpenAIProvider w/ localhost, "codestral")
     """
+    def _get_openai_provider(**kwargs) -> "LLMProvider":
+        """Get OpenAI provider with helpful error on missing package."""
+        try:
+            from astra.providers.openai_provider import OpenAIProvider
+            return OpenAIProvider(**kwargs)
+        except ImportError:
+            raise ImportError(
+                f"OpenAI package required for model '{model}'. "
+                "Install with: pip install astra-agent[openai]"
+            )
+
     # Check for local model prefixes
     for prefix in LOCAL_PREFIXES:
         if model.startswith(prefix):
             clean_name = model[len(prefix):]
-            from astra.providers.openai_provider import OpenAIProvider
 
             if prefix == "ollama/":
                 base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
@@ -36,17 +46,15 @@ def get_provider(model: str) -> tuple[LLMProvider, str]:
             else:
                 base_url = os.environ.get("LOCAL_LLM_BASE_URL", "http://localhost:11434/v1")
 
-            return OpenAIProvider(api_key="not-needed", base_url=base_url), clean_name
+            return _get_openai_provider(api_key="not-needed", base_url=base_url), clean_name
 
     # Check for OpenAI models
     if any(model.startswith(p) for p in OPENAI_PREFIXES):
-        from astra.providers.openai_provider import OpenAIProvider
-        return OpenAIProvider(), model
+        return _get_openai_provider(), model
 
     # Check if OPENAI_BASE_URL is set (custom provider)
     if os.environ.get("OPENAI_BASE_URL"):
-        from astra.providers.openai_provider import OpenAIProvider
-        return OpenAIProvider(), model
+        return _get_openai_provider(), model
 
     # Default to Anthropic
     from astra.providers.anthropic_provider import AnthropicProvider

@@ -254,8 +254,19 @@ async def cmd_model(args: str, engine: Any) -> CommandResult:
     new_model = args.strip()
     # Update config (create new frozen config)
     from dataclasses import replace
+    old_model = engine.config.model
     engine.config = replace(engine.config, model=new_model)
-    return CommandResult(f"Switched to model: {new_model}")
+    # Rebuild system prompt to reflect updated config
+    try:
+        from astra.agent.context import build_system_prompt
+        engine._system_prompt = await build_system_prompt(
+            cwd=str(engine.config.cwd),
+            tools=engine.tools,
+            memory_dir=engine.config.memory_dir,
+        )
+    except Exception:
+        pass  # Non-critical — prompt will be rebuilt on next init
+    return CommandResult(f"Switched model: {old_model} -> {new_model}")
 
 
 @command("map", "Show repository map (file structure + key symbols)")

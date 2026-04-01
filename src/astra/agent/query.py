@@ -132,7 +132,7 @@ async def query(
                     {
                         "type": "thinking",
                         "thinking": block.thinking,
-                        "signature": block.signature,
+                        "signature": getattr(block, "signature", ""),
                     }
                 )
             elif block.type == "text":
