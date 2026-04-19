@@ -2,9 +2,26 @@
 
 > *Astra* (Sanskrit: "tool/weapon") — An AI coding agent built from studying the best.
 
-## What is this?
+## What It Is
 
 Astra Agent is a next-generation AI coding agent, informed by deep analysis of production agent architectures. It features an async generator-based agent loop, pluggable tool system, MCP client integration, file-based memory, and a Rich-powered CLI.
+
+The project is aimed at builders who want to understand and experiment with the architecture of coding agents rather than treat them as black boxes. It is both a usable prototype and a learning-oriented implementation shaped by studying real production patterns.
+
+## Why Astra
+
+Coding agents are becoming a serious part of developer tooling, but most people only see the surface experience. Astra focuses on the underlying mechanics:
+
+- how the agent loop streams and recovers
+- how tools are modeled and executed
+- how MCP servers are bridged into the same tool system
+- how sessions, permissions, and memory fit into a practical CLI workflow
+
+## Current Status
+
+Astra Agent already has a real codebase, CLI entrypoint, core runtime structure, and working architectural slices in place.
+
+It is still early, but it is beyond a pure idea repo: the current value is in the implementation approach, the code organization, and the reference-driven design decisions that shape the next iterations.
 
 ## Quick Start
 
@@ -50,6 +67,13 @@ cli.py (Click REPL)
 | **Permission Modes** | `default` (ask for writes), `auto` (allow all), `bypass` (skip checks) |
 | **File-Based Memory** | YAML frontmatter `.md` files with `MEMORY.md` index, injected into system prompt |
 | **Session Persistence** | JSON snapshots of conversation + usage, resumable via `--resume` |
+
+## What Makes It Interesting
+
+- It treats MCP as a first-class extension path instead of an afterthought.
+- It keeps the agent loop explicit and inspectable.
+- It emphasizes architecture and code readability, not just flashy demos.
+- It acts as a bridge between production agent ideas and a smaller experimental codebase.
 
 ## Project Structure
 
@@ -148,6 +172,13 @@ See `docs/Claude-Code-Deep-Dive-Analysis.docx` for the comprehensive architectur
 - [ ] Context compaction (auto-compact on token budget)
 - [ ] Multi-agent coordinator mode
 - [ ] Plugin system for custom tools
+
+## Who This Is For
+
+- developers studying coding-agent internals
+- builders experimenting with MCP-enabled agent workflows
+- people who want a smaller reference implementation instead of a massive framework
+- anyone interested in practical agent architecture patterns
 
 ## Author
 
