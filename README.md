@@ -168,10 +168,28 @@ See `docs/Claude-Code-Deep-Dive-Analysis.docx` for the comprehensive architectur
 - [x] Memory/context management system
 - [x] CLI interface
 - [x] First working prototype
-- [ ] Tests and CI
+- [x] Tests and CI
 - [ ] Context compaction (auto-compact on token budget)
 - [ ] Multi-agent coordinator mode
 - [ ] Plugin system for custom tools
+
+## Memory Lifecycle
+
+Astra now includes an explicit memory lifecycle policy for long-running sessions:
+
+- short-term message retention for recent conversation context
+- optional persistence rules for older user and assistant messages
+- pruning for old memory files to keep the memory directory bounded
+- lightweight summary metadata for pruned session history
+
+The default policy keeps the implementation small, but it makes retention behavior intentional instead of ad hoc.
+
+## Development
+
+```bash
+pip install -e .[dev]
+pytest
+```
 
 ## Who This Is For
 

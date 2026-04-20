@@ -29,6 +29,15 @@ class SessionStorage:
         path.write_text(json.dumps(data, indent=2, default=str))
         return str(path)
 
+    def prune(self, keep_recent: int = 20) -> list[str]:
+        """Remove older session files, keeping only the most recent ones."""
+        session_files = sorted(self.session_dir.glob("*.json"), reverse=True)
+        removed: list[str] = []
+        for path in session_files[keep_recent:]:
+            path.unlink(missing_ok=True)
+            removed.append(str(path))
+        return removed
+
     def load(self, session_id: str) -> dict[str, Any]:
         path = self.session_dir / f"{session_id}.json"
         if not path.exists():

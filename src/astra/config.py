@@ -12,6 +12,17 @@ class PermissionMode(str, Enum):
 
 
 @dataclass(frozen=True)
+class MemoryLifecyclePolicy:
+    """Retention and pruning policy for long-running sessions."""
+
+    short_term_message_limit: int = 40
+    persist_user_messages: bool = True
+    persist_assistant_messages: bool = False
+    keep_recent_memories: int = 50
+    summarize_pruned_messages: bool = True
+
+
+@dataclass(frozen=True)
 class AstraConfig:
     model: str = "claude-sonnet-4-20250514"
     max_turns: int = 30
@@ -23,3 +34,4 @@ class AstraConfig:
     mcp_config_paths: tuple[str, ...] = ()
     verbose: bool = False
     thinking: bool = True
+    memory_policy: MemoryLifecyclePolicy = field(default_factory=MemoryLifecyclePolicy)
