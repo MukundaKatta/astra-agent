@@ -34,4 +34,6 @@ class PermissionChecker:
             return PermissionDecision.ALLOW
         if tool_name in ALWAYS_ASK_DEFAULT:
             return PermissionDecision.ASK
-        return PermissionDecision.ALLOW
+        # Unknown tools not in ALWAYS_ALLOW or ALWAYS_ASK_DEFAULT require
+        # confirmation in DEFAULT mode rather than silently executing.
+        return PermissionDecision.ASK
